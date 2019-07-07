@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;netstandard1.0</TargetFrameworks>
-    <Version>1.1.6</Version>
-    <Copyright>Copyright 2018</Copyright>
+    <VersionPrefix>1.1.6</VersionPrefix>
+    <Copyright>Copyright ©  $([System.DateTime]::UtcNow.Year)</Copyright>
     <PackageLicenseUrl>https://raw.githubusercontent.com/yavuztor/JsonLogic.Net/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/yavuztor/JsonLogic.Net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/yavuztor/JsonLogic.Net</RepositoryUrl>

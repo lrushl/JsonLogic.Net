@@ -1,0 +1,111 @@
+name: $(BuildDefinitionName)_$(SourceBranchName)_$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - master
+      - develop
+  paths:
+    include:
+      - JsonLogic.Net/*
+
+variables:
+- group: nuget
+- name: Configuration
+  value: Release
+
+pool:
+  vmImage: ubuntu-16.04
+
+steps:
+- task: PowerShell@2
+  displayName: Construct --version-suffix argument for non-master branches
+  env:
+    VersionSuffix: $(SourceBranchName)-$(Date:yyyyMMdd)-$(Rev:.r)
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      $versionSuffixArg = ""
+      if ($env:BUILD_SOURCEBRANCHNAME -ne 'master') {
+        $branchPart = $env:BUILD_SOURCEBRANCHNAME
+        $datePart = $(Get-Date -Format yyyyMMdd)
+        $buildId = $env:BUILD_BUILDID
+        $versionSuffixArg = "--version-suffix $branchPart-$datePart-$buildId"
+      }
+      "##vso[task.setvariable variable=VersionSuffixArg]$versionSuffixArg"
+
+- task: DotNetCoreCLI@2
+  displayName: Build
+  inputs:
+    command: build
+    configuration: $(Configuration)
+    projects: '**/*.csproj'
+    arguments: $(VersionSuffixArg)
+
+- task: DotNetCoreCLI@2
+  displayName: Test and Publish Results
+  inputs:
+    command: test
+    projects: '**/*Test*.csproj'
+    configuration: $(Configuration)
+    nobuild: true
+    publishTestResults: true
+    arguments: >
+      /p:CollectCoverage=true
+      /p:CoverletOutputFormat=cobertura
+      /p:CoverletOutput=$(Build.SourcesDirectory)/coverage/
+
+- task: PublishCodeCoverageResults@1
+  displayName: "Publish Code Coverage Results"
+  inputs:
+    codeCoverageTool: Cobertura
+    summaryFileLocation: "$(Build.SourcesDirectory)/coverage/coverage.cobertura.xml"
+    additionalCodeCoverageFiles: "$(Build.SourcesDirectory)/coverage/**/*.exec"
+
+- task: DotNetCoreCLI@2
+  displayName: Create NuGet Package
+  inputs:
+    command: custom
+    custom: pack
+    projects: 'JsonLogic.Net/JsonLogic.Net.csproj'
+    arguments: >
+      -o $(Build.ArtifactStagingDirectory)
+      -c $(Configuration)
+      $(VersionSuffixArg)
+      --no-build
+      --include-symbols
+      /p:SymbolPackageFormat=snupkg
+
+- task: DotNetCoreCLI@2
+  displayName: Push Nuget Package
+  condition: and(ne(variables['NuGetSourceServerUrl'], ''), ne(variables['NuGetSourceServerApiKey'], ''))
+  inputs:
+    command: custom
+    custom: nuget
+    arguments: >
+      push $(Build.ArtifactStagingDirectory)/*.nupkg
+      -s $(NuGetSourceServerUrl)
+      -k $(NuGetSourceServerApiKey)
+
+- task: DotNetCoreCLI@2
+  displayName: Push Nuget Symbol Package
+  condition: and(ne(variables['NuGetSourceServerUrl'], ''), ne(variables['NuGetSourceServerApiKey'], ''))
+  inputs:
+    command: custom
+    custom: nuget
+    arguments: >
+      push $(Build.ArtifactStagingDirectory)/*.snupkg
+      -s $(NuGetSourceServerUrl)
+      -k $(NuGetSourceServerApiKey)
+
+
+
+# once the following item https://github.com/Microsoft/azure-pipelines-tasks/issues/7160 will be fixed both above tasks could be replaced with this one
+# - task: DotNetCoreCLI@2
+#   displayName: Push Nuget Package
+#   inputs:
+#     command: push
+#     nuGetFeedType: external
+#     publishFeedCredentials: NuGetServiceConnection
+#     packagesToPush: $(Build.ArtifactStagingDirectory)/*.*nupkg

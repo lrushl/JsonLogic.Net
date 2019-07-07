@@ -438,7 +438,7 @@ namespace JsonLogic.Net.UnitTests
             var result = evaluator.Apply(rules, localData);
 
             // Assert
-            Assert.Equal((result as object[]).Length, 1);
+            Assert.Single((object[])result);
 
 
         }
